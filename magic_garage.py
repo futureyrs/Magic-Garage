@@ -388,7 +388,7 @@ def tesla_is_leaving_home():
         # for the car the pull out of the garage
         change_vehicle_data_thread_interval(TESLA_FETCH_VEHICLE_DATA_INTERVAL_SECS_FAST)
         change_myq_door_thread_interval(MYQ_DOOR_STATE_POLL_INTERVAL_SECS)
-        time.sleep(TESLA_PULL_OUT_GARAGE_DELAY_SECS)
+        #time.sleep(TESLA_PULL_OUT_GARAGE_DELAY_SECS)
         logging.info("Car is leaving home")
         return True
     elif ((distance_from_home >= HOME_GEO_FENCE_FT) and (distance_from_home <= AWAY_GEO_FENCE_FT)):
