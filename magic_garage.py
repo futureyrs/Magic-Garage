@@ -572,6 +572,7 @@ def myq_change_door_state(state):
     if ((state == "close") and (myq_door_state == "closed")):
         return False
 
+    myq_init()
     body = {
         "action_type": state,
     }
