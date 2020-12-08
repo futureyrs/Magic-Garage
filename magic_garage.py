@@ -29,6 +29,7 @@ FAR_AWAY_GEO_FENCE_FT = 26400
 ARRIVING_GEO_FENCE_FT = 1500
 OPEN_DOOR_GEO_FENCE_FT = 500
 MYQ_DOOR_STATE_POLL_INTERVAL_SECS = 2
+MYQ_DOOR_CLOSE_RETRY_SECS = 60
 MYQ_DOOR_STATE_POLL_TIMEOUT_SECS = 30
 MYQ_DOOR_STATE_CHECK_SECS = 60
 WATCHDOG_TIMEOUT_SECS = 5 * 60
@@ -595,6 +596,21 @@ def myq_change_door_state(state):
 def myq_door_open():
     return ((myq_door_state == "open") or (myq_door_state == "opening"))
 
+# Keeps trying to close the door in case the sensor is momentarily blocked
+def myq_door_close_retry():
+    start = time.time()
+    iterations = 15
+    for i in range(iterations):
+        if ((myq_door_state == "closing") or (myq_door_state == "closed")):
+            break
+        elif ((time.time() - start) >= MYQ_DOOR_CLOSE_RETRY_SECS):
+            logging.error("Timed out trying to close the garage door")
+            break
+        else:
+            logging.info("Trying to close the garage door, try " + str(i) + " of " + str(interations))
+            myq_change_door_state("close")
+            time.sleep(MYQ_DOOR_STATE_POLL_INTERVAL_SECS)
+
 # Polls the door state while it opens or closes
 def myq_poll_door_state():
     start = time.time()
@@ -614,6 +630,7 @@ def myq_open_door():
 # Close the garage door
 def myq_close_door():
     if(myq_change_door_state("close")):
+        myq_door_close_retry()
         myq_poll_door_state()
 
 # MyQ initialization
