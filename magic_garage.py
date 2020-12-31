@@ -13,8 +13,7 @@ from datetime import datetime
 from geopy import distance, location
 
 # Home location GPS Coordinates
-#HOME_LOCATION = location.Point(33.812671, -117.920392)
-HOME_LOCATION = location.Point(47.364004, -122.04087)
+HOME_LOCATION = location.Point(33.812671, -117.920392)
 # App Constants
 LOG_FILE_NAME = "debug.log"
 DEBUG_LOG_MAX_SIZE_BYTES = 5000000
