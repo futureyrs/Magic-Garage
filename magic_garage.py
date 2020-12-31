@@ -13,25 +13,27 @@ from datetime import datetime
 from geopy import distance, location
 
 # Home location GPS Coordinates
-HOME_LOCATION = location.Point(33.812671, -117.920392)
+#HOME_LOCATION = location.Point(33.812671, -117.920392)
+HOME_LOCATION = location.Point(47.364004, -122.04087)
 # App Constants
 LOG_FILE_NAME = "debug.log"
 DEBUG_LOG_MAX_SIZE_BYTES = 5000000
 TESLA_TOKEN_EXPIRE_CHECK_SECS = 24 * 60 * 60
 TESLA_LOCATION_DELAY_SECS = 2
 TESLA_FETCH_VEHICLE_DATA_INTERVAL_SECS_FAST = 1
-TESLA_FETCH_VEHICLE_DATA_INTERVAL_SECS_SLOW = 5 * 60
+TESLA_FETCH_VEHICLE_DATA_INTERVAL_SECS_SLOW = 6 * 60
 TESLA_STALE_DATA_THRESHOLD_SECS = 2 * TESLA_FETCH_VEHICLE_DATA_INTERVAL_SECS_SLOW
 TESLA_PULL_OUT_GARAGE_DELAY_SECS = 3
 HOME_GEO_FENCE_FT = 20
 AWAY_GEO_FENCE_FT = 2000
 FAR_AWAY_GEO_FENCE_FT = 26400
 ARRIVING_GEO_FENCE_FT = 1500
-OPEN_DOOR_GEO_FENCE_FT = 500
+OPEN_DOOR_GEO_FENCE_FT = 400
 MYQ_DOOR_STATE_POLL_INTERVAL_SECS = 2
 MYQ_DOOR_CLOSE_RETRY_SECS = 60
 MYQ_DOOR_STATE_POLL_TIMEOUT_SECS = 30
 MYQ_DOOR_STATE_CHECK_SECS = 60
+MYQ_LOGIN_TIMEOUT_SECS = 60 * 60
 WATCHDOG_TIMEOUT_SECS = 5 * 60
 WATCHDOG_RESET_SECS = 60
 watch_dog_last_update = time.time()
@@ -87,6 +89,7 @@ myq_door_state = ""
 myq_last_set_interval  = 0
 myq_door_thread_sleep = MYQ_DOOR_STATE_CHECK_SECS
 myq_door_thread_interval_changed = False
+myq_last_login = 0
 
 # General Functions
 # Initialize debug logging
@@ -505,6 +508,7 @@ def myq_login(email, password):
                 "MyQApplicationId": MYQ_APP_ID
             }
             logging.info("MyQ Auth Token Aquired")
+            myq_last_login = time.time()
         else:
             print_error_and_exit("Failed to get MyQ Auth Token: " + str(response.status_code))
     except Exception as e:
@@ -607,7 +611,7 @@ def myq_door_close_retry():
             logging.error("Timed out trying to close the garage door")
             break
         else:
-            logging.info("Trying to close the garage door, try " + str(i) + " of " + str(interations))
+            logging.info("Trying to close the garage door, try " + str(i) + " of " + str(iterations))
             myq_change_door_state("close")
             time.sleep(MYQ_DOOR_STATE_POLL_INTERVAL_SECS)
 
@@ -635,8 +639,9 @@ def myq_close_door():
 
 # MyQ initialization
 def myq_init():
-    myq_login(myq_email, myq_password)
-    myq_get_account_id()
+    if ((time.time() - myq_last_login) >= MYQ_LOGIN_TIMEOUT_SECS):
+        myq_login(myq_email, myq_password)
+        myq_get_account_id()
 
 # Initialize and start background threads
 def threading_init():
