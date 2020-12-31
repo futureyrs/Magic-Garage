@@ -20,17 +20,19 @@ DEBUG_LOG_MAX_SIZE_BYTES = 5000000
 TESLA_TOKEN_EXPIRE_CHECK_SECS = 24 * 60 * 60
 TESLA_LOCATION_DELAY_SECS = 2
 TESLA_FETCH_VEHICLE_DATA_INTERVAL_SECS_FAST = 1
-TESLA_FETCH_VEHICLE_DATA_INTERVAL_SECS_SLOW = 5 * 60
+TESLA_FETCH_VEHICLE_DATA_INTERVAL_SECS_SLOW = 6 * 60
 TESLA_STALE_DATA_THRESHOLD_SECS = 2 * TESLA_FETCH_VEHICLE_DATA_INTERVAL_SECS_SLOW
 TESLA_PULL_OUT_GARAGE_DELAY_SECS = 3
 HOME_GEO_FENCE_FT = 20
 AWAY_GEO_FENCE_FT = 2000
 FAR_AWAY_GEO_FENCE_FT = 26400
 ARRIVING_GEO_FENCE_FT = 1500
-OPEN_DOOR_GEO_FENCE_FT = 500
+OPEN_DOOR_GEO_FENCE_FT = 400
 MYQ_DOOR_STATE_POLL_INTERVAL_SECS = 2
+MYQ_DOOR_CLOSE_RETRY_SECS = 60
 MYQ_DOOR_STATE_POLL_TIMEOUT_SECS = 30
 MYQ_DOOR_STATE_CHECK_SECS = 60
+MYQ_LOGIN_TIMEOUT_SECS = 60 * 60
 WATCHDOG_TIMEOUT_SECS = 5 * 60
 WATCHDOG_RESET_SECS = 60
 watch_dog_last_update = time.time()
@@ -86,6 +88,7 @@ myq_door_state = ""
 myq_last_set_interval  = 0
 myq_door_thread_sleep = MYQ_DOOR_STATE_CHECK_SECS
 myq_door_thread_interval_changed = False
+myq_last_login = 0
 
 # General Functions
 # Initialize debug logging
@@ -388,7 +391,7 @@ def tesla_is_leaving_home():
         # for the car the pull out of the garage
         change_vehicle_data_thread_interval(TESLA_FETCH_VEHICLE_DATA_INTERVAL_SECS_FAST)
         change_myq_door_thread_interval(MYQ_DOOR_STATE_POLL_INTERVAL_SECS)
-        time.sleep(TESLA_PULL_OUT_GARAGE_DELAY_SECS)
+        #time.sleep(TESLA_PULL_OUT_GARAGE_DELAY_SECS)
         logging.info("Car is leaving home")
         return True
     elif ((distance_from_home >= HOME_GEO_FENCE_FT) and (distance_from_home <= AWAY_GEO_FENCE_FT)):
@@ -504,6 +507,7 @@ def myq_login(email, password):
                 "MyQApplicationId": MYQ_APP_ID
             }
             logging.info("MyQ Auth Token Aquired")
+            myq_last_login = time.time()
         else:
             print_error_and_exit("Failed to get MyQ Auth Token: " + str(response.status_code))
     except Exception as e:
@@ -572,6 +576,7 @@ def myq_change_door_state(state):
     if ((state == "close") and (myq_door_state == "closed")):
         return False
 
+    myq_init()
     body = {
         "action_type": state,
     }
@@ -594,6 +599,21 @@ def myq_change_door_state(state):
 def myq_door_open():
     return ((myq_door_state == "open") or (myq_door_state == "opening"))
 
+# Keeps trying to close the door in case the sensor is momentarily blocked
+def myq_door_close_retry():
+    start = time.time()
+    iterations = 15
+    for i in range(iterations):
+        if ((myq_door_state == "closing") or (myq_door_state == "closed")):
+            break
+        elif ((time.time() - start) >= MYQ_DOOR_CLOSE_RETRY_SECS):
+            logging.error("Timed out trying to close the garage door")
+            break
+        else:
+            logging.info("Trying to close the garage door, try " + str(i) + " of " + str(iterations))
+            myq_change_door_state("close")
+            time.sleep(MYQ_DOOR_STATE_POLL_INTERVAL_SECS)
+
 # Polls the door state while it opens or closes
 def myq_poll_door_state():
     start = time.time()
@@ -613,12 +633,14 @@ def myq_open_door():
 # Close the garage door
 def myq_close_door():
     if(myq_change_door_state("close")):
+        myq_door_close_retry()
         myq_poll_door_state()
 
 # MyQ initialization
 def myq_init():
-    myq_login(myq_email, myq_password)
-    myq_get_account_id()
+    if ((time.time() - myq_last_login) >= MYQ_LOGIN_TIMEOUT_SECS):
+        myq_login(myq_email, myq_password)
+        myq_get_account_id()
 
 # Initialize and start background threads
 def threading_init():
